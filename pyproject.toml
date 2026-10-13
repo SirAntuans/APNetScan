@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apnetscan"
+version = "0.1.0"
+description = "Detector de dispositivos en red local (ARP scan + ping sweep)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "APNetScan" }]
+keywords = ["network", "scanner", "arp", "discovery", "lan"]
+
+[project.optional-dependencies]
+arp = ["scapy>=2.5"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+apnetscan = "apnetscan.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["apnetscan*"]
