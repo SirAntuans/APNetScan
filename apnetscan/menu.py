@@ -163,7 +163,17 @@ def main_menu() -> int:
         return cli.main(["wol"] + macs.split())
 
     def _do_tui() -> int:
-        return cli.main(["tui"])
+        nets = local_networks()
+        if nets:
+            return cli.main(["tui"])
+        target = input(
+            "No se detectaron redes automáticamente.\n"
+            "Introduce la red para el panel (ej. 192.168.1.0/24): "
+        ).strip()
+        if not target:
+            print("Sin red objetivo, cancelado.")
+            return 1
+        return cli.main(["tui", "-t", target])
 
     def _do_save() -> int:
         return _detect_or_ask(["--save"])

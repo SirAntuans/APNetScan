@@ -61,8 +61,31 @@ def build_table(result: ScanResult, selected: int) -> Table:
     return table
 
 
-def _read_key(timeout: float) -> Optional[str]:
-    """Lee una tecla sin bloquear demasiado (solo POSIX; en otros entornos None)."""
+def _read_key_windows(timeout: float) -> Optional[str]:
+    """Lee una tecla en Windows con msvcrt (kbhit/getch)."""
+    import time as _time
+
+    try:
+        import msvcrt
+    except ImportError:
+        return None
+
+    deadline = _time.time() + timeout
+    while _time.time() < deadline:
+        if msvcrt.kbhit():
+            ch = msvcrt.getwch()
+            if ch in ("\x00", "\xe0"):
+                if msvcrt.kbhit():
+                    ext = msvcrt.getwch()
+                    return {"H": "up", "P": "down"}.get(ext)
+                return None
+            return ch
+        _time.sleep(0.05)
+    return None
+
+
+def _read_key_posix(timeout: float) -> Optional[str]:
+    """Lee una tecla en POSIX (termios en modo cbreak + select)."""
     try:
         import select
         import termios
@@ -87,6 +110,13 @@ def _read_key(timeout: float) -> Optional[str]:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
     except (ImportError, ValueError, OSError):
         return None
+
+
+def _read_key(timeout: float) -> Optional[str]:
+    """Lee una tecla sin bloquear. Usa msvcrt en Windows, termios en POSIX."""
+    if sys.platform.startswith("win"):
+        return _read_key_windows(timeout)
+    return _read_key_posix(timeout)
 
 
 def _render(console: Console, result: ScanResult, selected: int) -> None:

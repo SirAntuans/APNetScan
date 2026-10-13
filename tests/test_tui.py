@@ -31,3 +31,15 @@ def test_build_table_renders_hosts():
 def test_build_table_marker_on_selected():
     rendered = render(build_table(make_result(), selected=1))
     assert "→" in rendered
+
+
+def test_read_key_dispatches_by_platform(monkeypatch):
+    import sys
+
+    import apnetscan.tui as tui
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert tui._read_key(0.1) is None  # msvcrt no existe en Linux, devuelve None
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert tui._read_key(0.1) is None  # stdin no interactivo en pytest
