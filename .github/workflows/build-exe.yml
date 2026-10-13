@@ -17,11 +17,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            asset: apsoft-linux-x86_64
+            asset: apnetscan-linux-x86_64
           - os: windows-latest
-            asset: apsoft-windows-x86_64.exe
+            asset: apnetscan-windows-x86_64.exe
           - os: macos-latest
-            asset: apsoft-macos-arm64
+            asset: apnetscan-macos-arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,14 +32,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install . pyinstaller "rich>=13"
       - name: Compilar ejecutable
-        run: pyinstaller --onefile --name apsoft --clean --noconfirm entry.py
+        run: pyinstaller --onefile --name apnetscan --clean --noconfirm entry.py
       - name: Renombrar artefacto
         shell: bash
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            mv dist/apsoft.exe "dist/${{ matrix.asset }}"
+            mv dist/apnetscan.exe "dist/${{ matrix.asset }}"
           else
-            mv dist/apsoft "dist/${{ matrix.asset }}"
+            mv dist/apnetscan "dist/${{ matrix.asset }}"
           fi
       - name: Adjuntar al release
         if: startsWith(github.ref, 'refs/tags/')
