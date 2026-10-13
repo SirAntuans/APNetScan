@@ -30,3 +30,4 @@ def test_csv_export(tmp_path):
         rows = list(csv.DictReader(fh))
     assert len(rows) == 2
     assert rows[1]["ip"] == "192.168.1.10"
+    assert "open_ports" in rows[0]
