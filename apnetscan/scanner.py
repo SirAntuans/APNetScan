@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable, Optional
 
+from .enrich import enrich_host
 from .models import Host, ScanResult
 from .utils import lookup_hostname, lookup_vendor
 
@@ -107,10 +108,14 @@ class Scanner:
         method: str = ScanMethod.AUTO.value,
         timeout: float = 2.0,
         resolve_names: bool = True,
+        ports: list[int] | None = None,
+        with_latency: bool = True,
     ) -> None:
         self.method = ScanMethod(method)
         self.timeout = timeout
         self.resolve_names = resolve_names
+        self.ports = ports or []
+        self.with_latency = with_latency
 
     def _effective_method(self, network: str) -> str:
         if self.method == ScanMethod.PING:
@@ -148,6 +153,17 @@ class Scanner:
                 if host.ip not in all_hosts:
                     all_hosts[host.ip] = host
         hosts = sorted(all_hosts.values(), key=lambda h: ipaddress.ip_address(h.ip))
+        if self.ports or self.with_latency:
+            from .enrich import enrich_host
+
+            port_timeout = min(0.6, self.timeout / 2)
+            for host in hosts:
+                enrich_host(
+                    host,
+                    ports=self.ports,
+                    timeout=port_timeout,
+                    with_latency=self.with_latency,
+                )
         return ScanResult(target=", ".join(networks), hosts=hosts)
 
     def scan_local(self) -> ScanResult:

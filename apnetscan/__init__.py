@@ -3,6 +3,16 @@
 from .models import Host
 from .scanner import Scanner, ScanMethod, ScanResult
 from .passive import listen
+from .wol import send_wol, send_wol_many, build_magic_packet
 
-__version__ = "0.1.0"
-__all__ = ["Host", "Scanner", "ScanMethod", "ScanResult", "listen"]
+__version__ = "0.2.0"
+__all__ = [
+    "Host",
+    "Scanner",
+    "ScanMethod",
+    "ScanResult",
+    "listen",
+    "send_wol",
+    "send_wol_many",
+    "build_magic_packet",
+]
