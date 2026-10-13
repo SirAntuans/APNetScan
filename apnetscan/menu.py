@@ -23,12 +23,11 @@ MENU_OPTIONS = [
     ("0", "Salir", "Cerrar la aplicación"),
 ]
 
-_BANNER = r"""
-    _    ____  ____    _    ___ _
-   / \  |  _ \|  _ \  / \  / __(_)_ __ ___
-  / _ \ | |_) | |_) |/ _ \| |  | | '_ ` _ \
- / ___ \|  __/|  __ / ___ \ |__| | | | | | |
-/_/   \_\_|   |_| /_/   \_\___|_|_| |_| |_|
+_BANNER = r"""    _    ____  _   _      _   ____                  
+   / \  |  _ \| \ | | ___| |_/ ___|  ___ __ _ _ __  
+  / _ \ | |_) |  \| |/ _ \ __\___ \ / __/ _` | '_ \ 
+ / ___ \|  __/| |\  |  __/ |_ ___) | (_| (_| | | | |
+/_/   \_\_|   |_| \_|\___|\__|____/ \___\__,_|_| |_|
 """
 
 
@@ -124,19 +123,35 @@ def menu_loop(actions: dict[str, Callable[[], int]]) -> int:
 def main_menu() -> int:
     """Punto de entrada del menú con las acciones por defecto de la app."""
     from . import cli
+    from .utils import local_networks
+
+    def _detect_or_ask(extra: list[str] | None = None) -> int:
+        extra = extra or []
+        nets = local_networks()
+        if nets:
+            print(f"Redes detectadas: {', '.join(nets)}")
+            return cli.main(["scan"] + extra)
+        target = input(
+            "No se detectaron redes automáticamente.\n"
+            "Introduce la red a escanear (ej. 192.168.1.0/24): "
+        ).strip()
+        if not target:
+            print("Sin red objetivo, cancelado.")
+            return 1
+        return cli.main(["scan", "-t", target] + extra)
 
     def _do_scan() -> int:
-        return cli.main(["scan"])
+        return _detect_or_ask()
 
     def _do_scan_ports() -> int:
-        return cli.main(["scan", "--common-ports"])
+        return _detect_or_ask(["--common-ports"])
 
     def _do_scan_range() -> int:
         spec = input("Rango de puertos (ej. 1-1024 o 20-25,80,443): ").strip()
         if not spec:
             print("Rango vacío, cancelado.")
             return 1
-        return cli.main(["scan", "--port-range", spec])
+        return _detect_or_ask(["--port-range", spec])
 
     def _do_wol() -> int:
         macs = input("MACs (separadas por espacio): ").strip()
@@ -149,10 +164,10 @@ def main_menu() -> int:
         return cli.main(["tui"])
 
     def _do_save() -> int:
-        return cli.main(["scan", "--save"])
+        return _detect_or_ask(["--save"])
 
     def _do_diff() -> int:
-        return cli.main(["scan", "--diff"])
+        return _detect_or_ask(["--diff"])
 
     def _do_passive() -> int:
         dur = input("Duración en segundos (30): ").strip() or "30"

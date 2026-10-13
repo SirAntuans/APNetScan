@@ -45,8 +45,8 @@ def lookup_hostname(ip: str) -> Optional[str]:
         return None
 
 
-def local_networks(ip: Optional[str] = None) -> list[str]:
-    """Devuelve los CIDR de las interfaces locales (o la que contiene `ip`)."""
+def _networks_from_iproutes() -> list[str]:
+    """Linux: parsear `ip -4 -o addr show`."""
     import subprocess
 
     networks: list[str] = []
@@ -69,14 +69,140 @@ def local_networks(ip: Optional[str] = None) -> list[str]:
             net = ipaddress.ip_network(cidr, strict=False)
         except ValueError:
             continue
-        if net.is_loopback:
-            continue
-        if ip:
-            try:
-                if ipaddress.ip_address(ip) not in net:
-                    continue
-            except ValueError:
-                continue
-        if str(net) not in networks:
+        if not net.is_loopback:
             networks.append(str(net))
     return networks
+
+
+def _networks_from_ipconfig() -> list[str]:
+    """Windows: parsear `ipconfig` (IPv4 + máscara)."""
+    import re
+    import subprocess
+
+    networks: list[str] = []
+    try:
+        out = subprocess.run(
+            ["ipconfig"], capture_output=True, text=True, timeout=5, check=True
+        ).stdout
+    except Exception:
+        return networks
+    blocks: dict[str, dict] = {}
+    current: str | None = None
+    for line in out.splitlines():
+        if line and not line.startswith(" "):
+            current = line.strip()
+            blocks.setdefault(current, {})
+        elif current:
+            ipv4_m = re.search(r"IPv4[^:]*:\s*(\d+\.\d+\.\d+\.\d+)", line)
+            mask_m = re.search(r"(?:M\u00e1scara|Máscara|Subnet)[^:]*:\s*(\d+\.\d+\.\d+\.\d+)", line)
+            if ipv4_m:
+                blocks[current]["ip"] = ipv4_m.group(1)
+            if mask_m:
+                blocks[current]["mask"] = mask_m.group(1)
+    for data in blocks.values():
+        ip_s, mask = data.get("ip"), data.get("mask")
+        if not ip_s or not mask:
+            continue
+        try:
+            addr = ipaddress.ip_address(ip_s)
+            mask_int = ipaddress.ip_address(mask).packed
+            prefix = sum(bin(b).count("1") for b in mask_int)
+            net = ipaddress.ip_network(f"{ip_s}/{prefix}", strict=False)
+        except ValueError:
+            continue
+        if not net.is_loopback:
+            networks.append(str(net))
+    return networks
+
+
+def _networks_from_ifconfig() -> list[str]:
+    """macOS/BSD: parsear `ifconfig`."""
+    import re
+    import subprocess
+
+    networks: list[str] = []
+    try:
+        out = subprocess.run(
+            ["ifconfig"], capture_output=True, text=True, timeout=5, check=True
+        ).stdout
+    except Exception:
+        return networks
+    iface = None
+    for line in out.splitlines():
+        if line and not line.startswith(("\t", " ")):
+            iface = line.split(":")[0]
+        if iface in ("lo", "lo0"):
+            continue
+        m = re.match(r"\s*inet (\d+\.\d+\.\d+\.\d+) netmask (\S+)", line)
+        if not m:
+            continue
+        ip_s, mask_hex = m.group(1), m.group(2)
+        try:
+            if mask_hex.startswith("0x"):
+                mask_int = int(mask_hex, 16)
+                prefix = bin(mask_int).count("1")
+            else:
+                mask = ipaddress.ip_address(mask_hex)
+                prefix = sum(bin(b).count("1") for b in mask.packed)
+            net = ipaddress.ip_network(f"{ip_s}/{prefix}", strict=False)
+        except ValueError:
+            continue
+        if not net.is_loopback:
+            networks.append(str(net))
+    return networks
+
+
+def _networks_from_getenv() -> list[str]:
+    """Fallback puro Python: conectar UDP a 8.8.8.8 y ver la IP local."""
+    networks: list[str] = []
+    try:
+        import socket
+
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(2.0)
+            sock.connect(("8.8.8.8", 80))
+            local_ip = sock.getsockname()[0]
+        net = ipaddress.ip_network(f"{local_ip}/24", strict=False)
+        if not net.is_loopback:
+            networks.append(str(net))
+    except (OSError, ValueError):
+        pass
+    return networks
+
+
+def local_networks(ip: Optional[str] = None) -> list[str]:
+    """Devuelve los CIDR de las interfaces locales, multiplataforma.
+
+    Orden de intento: Linux `ip` -> Windows `ipconfig` -> macOS `ifconfig`
+    -> fallback UDP. Si `ip` se proporciona, filtra la red que la contiene.
+    """
+    import sys
+
+    networks: list[str] = []
+    detectors = [
+        _networks_from_iproutes,
+        _networks_from_ipconfig,
+        _networks_from_ifconfig,
+        _networks_from_getenv,
+    ]
+    for detect in detectors:
+        networks = detect()
+        if networks:
+            break
+
+    if ip:
+        try:
+            target = ipaddress.ip_address(ip)
+        except ValueError:
+            return networks
+        networks = [
+            str(n)
+            for n in (ipaddress.ip_network(c) for c in networks)
+            if target in n
+        ]
+
+    unique: list[str] = []
+    for n in networks:
+        if n not in unique:
+            unique.append(n)
+    return unique
