@@ -1,0 +1,48 @@
+name: Build executables
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: apsoft-linux-x86_64
+          - os: windows-latest
+            asset: apsoft-windows-x86_64.exe
+          - os: macos-latest
+            asset: apsoft-macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install . pyinstaller "rich>=13"
+      - name: Compilar ejecutable
+        run: pyinstaller --onefile --name apsoft --clean --noconfirm entry.py
+      - name: Renombrar artefacto
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv dist/apsoft.exe "dist/${{ matrix.asset }}"
+          else
+            mv dist/apsoft "dist/${{ matrix.asset }}"
+          fi
+      - name: Adjuntar al release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" "dist/${{ matrix.asset }}" --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
