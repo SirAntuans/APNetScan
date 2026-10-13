@@ -99,3 +99,12 @@ Escanear redes de terceros sin permiso puede ser ilegal.
   tabla viva con navegación ↑/↓, `r` para refrescar, `w` para enviar WOL al
   dispositivo seleccionado y `q` para salir. Se re-escanea automáticamente
   cada `--interval` segundos.
+
+## v1.4.0 — Menú gráfico al abrir la app
+
+- Al ejecutar `apnetscan` (sin subcomando) se abre un **menú interactivo** con
+  banner APSoft y panel de opciones: escanear red, puertos comunes, rango de
+  puertos, WOL, panel TUI, guardar/comparar inventario y modo pasivo.
+- Renderizado con rich (paneles redondeados, colores); fallback automático a
+  texto plano si rich no está instalado.
+- Los subcomandos directos (`apnetscan scan ...`) siguen funcionando igual.

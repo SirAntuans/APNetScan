@@ -298,8 +298,9 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_scan(args)
     if args.command == "tui":
         return _cmd_tui(args)
-    build_parser().parse_args(["scan", "--help"])
-    return 0
+    from .menu import main_menu
+
+    return main_menu()
 
 
 if __name__ == "__main__":
