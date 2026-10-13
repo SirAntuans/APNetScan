@@ -8,7 +8,18 @@ from pathlib import Path
 
 from .models import ScanResult
 
-FIELDS = ["ip", "mac", "vendor", "hostname", "method", "ttl", "latency_ms", "open_ports", "status"]
+FIELDS = [
+    "ip",
+    "mac",
+    "vendor",
+    "hostname",
+    "method",
+    "ttl",
+    "latency_ms",
+    "open_ports",
+    "status",
+    "os_guess",
+]
 
 
 def to_json(result: ScanResult, path: str | Path) -> Path:

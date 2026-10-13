@@ -5,7 +5,7 @@ from .scanner import Scanner, ScanMethod, ScanResult
 from .passive import listen
 from .wol import send_wol, send_wol_many, build_magic_packet
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "Host",
     "Scanner",

@@ -28,6 +28,49 @@ PORT_NAMES = {
     8080: "http-alt",
 }
 
+TTL_RANGES = [
+    (0, 33, "embedded/dispositivo IoT"),
+    (34, 65, "Linux/Unix/macOS"),
+    (66, 129, "Windows"),
+    (130, 256, "Unix antiguo/redirigido"),
+]
+
+
+def guess_os(ttl: Optional[int]) -> Optional[str]:
+    """Estimación de SO a partir del TTL observado (heurística inicial)."""
+    if ttl is None:
+        return None
+    for low, high, label in TTL_RANGES:
+        if low <= ttl < high:
+            return label
+    return None
+
+
+def parse_ping_ttl(ip: str, timeout: float = 1.0) -> tuple[Optional[float], Optional[int]]:
+    """Ejecuta ping y parsea la salida para obtener (latencia_ms, ttl)."""
+    import re
+    import subprocess
+    import sys
+
+    flag = "-n" if sys.platform.startswith("win") else "-c"
+    tos = "-w" if sys.platform.startswith("win") else "-W"
+    secs = str(int(max(1, timeout)))
+    cmd = ["ping", flag, "1", tos, secs, ip]
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout + 2
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None, None
+    if proc.returncode != 0:
+        return None, None
+    out = proc.stdout
+    time_m = re.search(r"time[=<]([\d.]+)\s*ms", out)
+    ttl_m = re.search(r"[Tt][Tt][Ll][=:]\s*(\d+)", out) or re.search(r"ttl\s*=\s*(\d+)", out)
+    latency = float(time_m.group(1)) if time_m else None
+    ttl = int(ttl_m.group(1)) if ttl_m else None
+    return (round(latency, 2) if latency is not None else None), ttl
+
 
 def measure_latency(ip: str, timeout: float = 1.0) -> tuple[Optional[float], Optional[int]]:
     """Mide latencia TCP (connect al primer puerto abierto o 80/443) y devuelve
@@ -72,12 +115,19 @@ def enrich_host(
     timeout: float = 0.5,
     with_latency: bool = True,
 ) -> Host:
-    """Añade puertos abiertos, servicios y latencia a un host detectado."""
+    """Añade puertos abiertos, servicios, latencia, TTL y estimación de SO."""
     if ports:
         host.open_ports = check_ports(host.ip, ports, timeout=timeout)
     if with_latency:
         latency, _ = measure_latency(host.ip, timeout=max(timeout, 1.0))
         host.latency_ms = latency
+        ping_latency, ttl = parse_ping_ttl(host.ip, timeout=max(timeout, 1.0))
+        if ttl is not None:
+            host.ttl = ttl
+        elif latency is None and ping_latency is not None:
+            host.latency_ms = ping_latency
+        if host.ttl is not None and host.os_guess is None:
+            host.os_guess = guess_os(host.ttl)
     return host
 
 

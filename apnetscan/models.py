@@ -19,6 +19,7 @@ class Host:
     latency_ms: Optional[float] = None
     open_ports: list[int] = field(default_factory=list)
     status: str = "up"
+    os_guess: Optional[str] = None
 
     def as_dict(self) -> dict:
         return {
@@ -31,6 +32,7 @@ class Host:
             "latency_ms": self.latency_ms,
             "open_ports": self.open_ports,
             "status": self.status,
+            "os_guess": self.os_guess,
         }
 
     def summary(self) -> str:

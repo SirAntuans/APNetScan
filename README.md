@@ -74,3 +74,12 @@ for host in results:
 
 Usa APNetScan únicamente en redes propias o para las que tengas autorización.
 Escanear redes de terceros sin permiso puede ser ilegal.
+
+## Novedades v0.3.0
+
+- **Estimación de SO por TTL** (Windows / Linux-Unix-macOS / IoT) en cada host detectado.
+- **Inventario persistente** (`scan --save`) en `~/.apnetscan/inventory.json` con
+  comparación de deltas (`scan --diff`): dispositivos nuevos (+), desaparecidos (-)
+  y modificados (~) en MAC o hostname.
+- **Modo watch** (`apnetscan watch -t 192.168.1.0/24 --interval 30`): re-escanea
+  periódicamente y refresca la lista de dispositivos.

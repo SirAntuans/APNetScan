@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 
 from . import __version__
 from .enrich import port_label
@@ -13,28 +14,83 @@ from .passive import listen
 from .scanner import ScanMethod, Scanner
 from .wol import normalize_mac, send_wol
 
-HEADER = ("IP", "MAC", "FABRICANTE", "HOSTNAME", "PUERTOS", "LAT.")
-COLS = (16, 19, 22, 22, 22, 8)
+HEADER = ("IP", "MAC", "FABRICANTE", "HOSTNAME", "PUERTOS", "TTL", "SO", "LAT.")
+COLS = (16, 19, 20, 20, 20, 5, 14, 8)
 
 
 def _print_table(result: ScanResult) -> None:
     w = COLS
     print(HEADER[0].ljust(w[0]), HEADER[1].ljust(w[1]),
           HEADER[2].ljust(w[2]), HEADER[3].ljust(w[3]),
-          HEADER[4].ljust(w[4]), HEADER[5])
-    print("-" * (sum(w) + 5))
+          HEADER[4].ljust(w[4]), HEADER[5].ljust(w[5]),
+          HEADER[6].ljust(w[6]), HEADER[7])
+    print("-" * (sum(w) + 7))
     for h in result.hosts:
         ports = ",".join(port_label(p) for p in h.open_ports) if h.open_ports else "-"
         latency = f"{h.latency_ms:.1f}ms" if h.latency_ms is not None else "-"
         print(
             h.ip.ljust(w[0]),
             (h.mac or "-").ljust(w[1]),
-            (h.vendor or "-")[:22].ljust(w[2]),
-            (h.hostname or "-")[:22].ljust(w[3]),
+            (h.vendor or "-")[:20].ljust(w[2]),
+            (h.hostname or "-")[:20].ljust(w[3]),
             ports.ljust(w[4]),
+            str(h.ttl if h.ttl is not None else "-").ljust(w[5]),
+            (h.os_guess or "-").ljust(w[6]),
             latency,
         )
     print(f"\n{result.count} dispositivo(s) encontrados en {result.target}.")
+
+
+def _print_diff(inv_diff) -> None:
+    if inv_diff.is_empty:
+        print("Sin cambios respecto al inventario guardado.")
+        return
+    if inv_diff.new:
+        print("NUEVOS:")
+        for h in inv_diff.new:
+            print(f"  + {h.summary()}")
+    if inv_diff.missing:
+        print("DESAPARECIDOS:")
+        for h in inv_diff.missing:
+            print(f"  - {h.summary()}")
+    if inv_diff.changed:
+        print("MODIFICADOS (MAC/hostname):")
+        for h in inv_diff.changed:
+            print(f"  ~ {h.summary()}")
+
+
+def _add_scan_options(sub: argparse.ArgumentParser) -> None:
+    sub.add_argument(
+        "-t", "--target",
+        nargs="+",
+        help="Red(es) en CIDR o IP (p. ej. 192.168.1.0/24). Vacío = redes locales.",
+    )
+    sub.add_argument(
+        "--method",
+        choices=[m.value for m in ScanMethod],
+        default=ScanMethod.AUTO.value,
+        help="Método: auto, arp o ping (por defecto: auto).",
+    )
+    sub.add_argument("--timeout", type=float, default=2.0, help="Espera por red (s).")
+    sub.add_argument("--no-resolve", action="store_true", help="Sin DNS reverso.")
+    sub.add_argument(
+        "--ports", nargs="*", type=int, default=None,
+        help="Comprobar estos puertos TCP (vacío = no comprobar).",
+    )
+    sub.add_argument(
+        "--common-ports", action="store_true",
+        help="Comprobar puertos comunes (21,22,23,25,53,80,...).",
+    )
+    sub.add_argument("--json", help="Guardar resultados en JSON.")
+    sub.add_argument("--csv", help="Guardar resultados en CSV.")
+    sub.add_argument(
+        "--save", action="store_true",
+        help="Guardar el escaneo como inventario (~/.apnetscan/inventory.json).",
+    )
+    sub.add_argument(
+        "--diff", action="store_true",
+        help="Comparar con el inventario guardado y mostrar cambios.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,33 +102,20 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     scan = sub.add_parser("scan", help="Escanear red(es) y listar dispositivos.")
-    scan.add_argument(
-        "-t", "--target",
-        nargs="+",
-        help="Red(es) en CIDR o IP (p. ej. 192.168.1.0/24). Vacío = redes locales.",
+    _add_scan_options(scan)
+
+    watch = sub.add_parser(
+        "watch", help="Re-escanear periódicamente mostrando la lista actualizada."
     )
-    scan.add_argument(
-        "--method",
-        choices=[m.value for m in ScanMethod],
-        default=ScanMethod.AUTO.value,
-        help="Método: auto, arp o ping (por defecto: auto).",
+    _add_scan_options(watch)
+    watch.add_argument(
+        "--interval", type=float, default=30.0,
+        help="Segundos entre escaneos (por defecto: 30).",
     )
-    scan.add_argument("--timeout", type=float, default=2.0, help="Espera por red (s).")
-    scan.add_argument("--no-resolve", action="store_true", help="Sin DNS reverso.")
-    scan.add_argument(
-        "--ports",
-        nargs="*",
-        type=int,
-        default=None,
-        help="Comprobar estos puertos TCP (vacío = no comprobar).",
+    watch.add_argument(
+        "--once", action="store_true",
+        help="Ejecutar un único escaneo y salir (para pruebas).",
     )
-    scan.add_argument(
-        "--common-ports",
-        action="store_true",
-        help="Comprobar los puertos comunes (21,22,23,25,53,80,...).",
-    )
-    scan.add_argument("--json", help="Guardar resultados en JSON.")
-    scan.add_argument("--csv", help="Guardar resultados en CSV.")
 
     wol = sub.add_parser("wol", help="Enviar Wake-on-LAN a una o varias MACs.")
     wol.add_argument("macs", nargs="+", help="Direcciones MAC objetivo.")
@@ -87,42 +130,70 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _cmd_scan(args) -> int:
+def _run_scan(args) -> ScanResult:
     from .enrich import COMMON_PORTS
 
-    ports: list[int] = []
-    if args.common_ports:
-        ports = COMMON_PORTS
-    elif args.ports:
-        ports = args.ports
-
+    ports = COMMON_PORTS if args.common_ports else (args.ports or [])
     scanner = Scanner(
         method=args.method,
         timeout=args.timeout,
         resolve_names=not args.no_resolve,
         ports=ports,
     )
-    try:
-        if args.target:
-            result = scanner.scan(args.target)
-        else:
-            result = scanner.scan_local()
-    except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 2
+    if args.target:
+        return scanner.scan(args.target)
+    return scanner.scan_local()
+
+
+def _post_scan(args, result: ScanResult) -> None:
+    from . import inventory
 
     if result.hosts:
         _print_table(result)
     else:
         print("No se detectaron dispositivos.")
 
+    if args.diff:
+        inv_diff = inventory.diff(result)
+        print("\n=== DIFERENCIA CON INVENTARIO ===")
+        _print_diff(inv_diff)
+    if args.save:
+        path = inventory.save(result)
+        print(f"Inventario guardado en {path}")
     if args.json:
         to_json(result, args.json)
         print(f"Resultados guardados en {args.json}")
     if args.csv:
         to_csv(result, args.csv)
         print(f"Resultados guardados en {args.csv}")
+
+
+def _cmd_scan(args) -> int:
+    try:
+        result = _run_scan(args)
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    _post_scan(args, result)
     return 0
+
+
+def _cmd_watch(args) -> int:
+    try:
+        while True:
+            print(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
+            try:
+                result = _run_scan(args)
+            except RuntimeError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                return 2
+            _post_scan(args, result)
+            if args.once:
+                return 0
+            time.sleep(max(1.0, args.interval))
+    except KeyboardInterrupt:
+        print("\nDetenido por el usuario.")
+        return 0
 
 
 def _cmd_wol(args) -> int:
@@ -164,6 +235,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_wol(args)
     if args.command == "passive":
         return _cmd_passive(args)
+    if args.command == "watch":
+        return _cmd_watch(args)
     if args.command == "scan":
         return _cmd_scan(args)
     build_parser().parse_args(["scan", "--help"])
