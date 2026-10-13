@@ -108,3 +108,11 @@ Escanear redes de terceros sin permiso puede ser ilegal.
 - Renderizado con rich (paneles redondeados, colores); fallback automático a
   texto plano si rich no está instalado.
 - Los subcomandos directos (`apnetscan scan ...`) siguen funcionando igual.
+
+## v1.5.0 — MACs sin scapy y detección mejorada
+
+- **MAC + fabricante en el backend ping**: tras el ping sweep se lee la tabla
+  ARP del sistema (`ip neigh` / `arp -a`, multiplataforma), que el propio ping
+  acaba de poblar. Ya no se necesita scapy ni root para obtener MACs.
+- **Menú**: la opción "Escanear red" pregunta si comprobar puertos comunes.
+- **TTL 254** reinterpretado como "router/IoT (TTL alto)" (etiqueta más precisa).

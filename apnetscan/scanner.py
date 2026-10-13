@@ -80,7 +80,13 @@ def _ping_one(ip: str, timeout: float) -> bool:
 
 
 def _ping_scan(network: str, timeout: float, workers: int = 32) -> list[Host]:
-    """Ping sweep sobre un CIDR con pool de hilos."""
+    """Ping sweep sobre un CIDR con pool de hilos.
+
+    Tras el sweep, lee la tabla ARP del SO para asignar MAC a cada IP
+    respondida (el ping acaba de poblar la cache ARP del sistema).
+    """
+    from .utils import arp_table, lookup_vendor
+
     net = ipaddress.ip_network(network, strict=False)
     ips = [str(ip) for ip in net.hosts()] or [str(net.network_address)]
     hosts: list[Host] = []
@@ -90,6 +96,14 @@ def _ping_scan(network: str, timeout: float, workers: int = 32) -> list[Host]:
             if future.result():
                 ip = futures[future]
                 hosts.append(Host(ip=ip, method="ping"))
+
+    table = arp_table()
+    for host in hosts:
+        mac = table.get(host.ip)
+        if mac:
+            host.mac = mac
+            host.vendor = lookup_vendor(mac)
+
     hosts.sort(key=lambda h: ipaddress.ip_address(h.ip))
     return hosts
 

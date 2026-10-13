@@ -206,3 +206,47 @@ def local_networks(ip: Optional[str] = None) -> list[str]:
         if n not in unique:
             unique.append(n)
     return unique
+
+
+def arp_table() -> dict[str, str]:
+    """Lee la tabla ARP del sistema operativo y devuelve {ip: mac}.
+
+    Multiplataforma: `ip neigh` (Linux), `arp -a` (Windows/macOS/BSD).
+    Requiere que los hosts hayan sido contactados antes (ping) para que
+    el sistema haya poblado su cache ARP.
+    """
+    import re
+    import subprocess
+
+    table: dict[str, str] = {}
+
+    def _try(cmd: list[str]) -> str:
+        try:
+            return subprocess.run(
+                cmd, capture_output=True, text=True, timeout=5, check=True
+            ).stdout
+        except Exception:
+            return ""
+
+    out = _try(["ip", "neigh"])
+    if not out:
+        out = _try(["arp", "-a"])
+    if not out:
+        return table
+
+    for line in out.splitlines():
+        ip_m = re.search(r"(\d+\.\d+\.\d+\.\d+)", line)
+        mac_m = re.search(
+            r"([0-9a-fA-F]{1,2}[:-]){5}[0-9a-fA-F]{1,2}", line
+        )
+        if not ip_m or not mac_m:
+            continue
+        ip = ip_m.group(1)
+        mac = mac_m.group(0).lower().replace("-", ":")
+        parts = mac.split(":")
+        if len(parts) == 6:
+            mac = ":".join(p.zfill(2) for p in parts)
+        if ip in ("127.0.0.1",) or mac.startswith("ff:ff:ff"):
+            continue
+        table[ip] = mac
+    return table

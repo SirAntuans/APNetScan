@@ -141,7 +141,9 @@ def main_menu() -> int:
         return cli.main(["scan", "-t", target] + extra)
 
     def _do_scan() -> int:
-        return _detect_or_ask()
+        ans = input("¿Comprobar puertos comunes? (s/N): ").strip().lower()
+        extra = ["--common-ports"] if ans == "s" else []
+        return _detect_or_ask(extra)
 
     def _do_scan_ports() -> int:
         return _detect_or_ask(["--common-ports"])

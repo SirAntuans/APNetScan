@@ -32,7 +32,7 @@ TTL_RANGES = [
     (0, 33, "embedded/dispositivo IoT"),
     (34, 65, "Linux/Unix/macOS"),
     (66, 129, "Windows"),
-    (130, 256, "Unix antiguo/redirigido"),
+    (130, 256, "router/IoT (TTL alto)"),
 ]
 
 

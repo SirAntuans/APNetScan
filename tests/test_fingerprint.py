@@ -5,7 +5,7 @@ def test_guess_os_ranges():
     assert guess_os(None) is None
     assert guess_os(64) == "Linux/Unix/macOS"
     assert guess_os(128) == "Windows"
-    assert guess_os(255) == "Unix antiguo/redirigido"
+    assert guess_os(255) == "router/IoT (TTL alto)"
     assert guess_os(20) == "embedded/dispositivo IoT"
 
 
