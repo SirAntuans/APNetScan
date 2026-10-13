@@ -1,4 +1,4 @@
-# APNetScan
+# APSoft (APNetScan)
 
 Escáner de dispositivos en red local escrito en Python.
 
@@ -83,3 +83,10 @@ Escanear redes de terceros sin permiso puede ser ilegal.
   y modificados (~) en MAC o hostname.
 - **Modo watch** (`apnetscan watch -t 192.168.1.0/24 --interval 30`): re-escanea
   periódicamente y refresca la lista de dispositivos.
+
+## v1.0.0 — APSoft
+
+- **Rebrand de la app compilada a APSoft**: nuevo comando `apsoft` (se mantiene
+  `apnetscan` como alias) y banner ASCII con el título APSoft.
+- **Salida gráfica tipo panel**: tabla con bordes box-drawing (┌─┬─┐) y colores
+  ANSI que se desactivan automáticamente en pipes/CI para máxima estabilidad.

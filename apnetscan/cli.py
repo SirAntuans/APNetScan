@@ -7,6 +7,7 @@ import sys
 import time
 
 from . import __version__
+from .display import APP_TITLE, Palette, print_banner, render_table
 from .enrich import port_label
 from .export import to_csv, to_json
 from .models import ScanResult
@@ -14,30 +15,26 @@ from .passive import listen
 from .scanner import ScanMethod, Scanner
 from .wol import normalize_mac, send_wol
 
-HEADER = ("IP", "MAC", "FABRICANTE", "HOSTNAME", "PUERTOS", "TTL", "SO", "LAT.")
-COLS = (16, 19, 20, 20, 20, 5, 14, 8)
+HEADERS = ("IP", "MAC", "FABRICANTE", "HOSTNAME", "PUERTOS", "TTL", "SO", "LAT.")
 
 
 def _print_table(result: ScanResult) -> None:
-    w = COLS
-    print(HEADER[0].ljust(w[0]), HEADER[1].ljust(w[1]),
-          HEADER[2].ljust(w[2]), HEADER[3].ljust(w[3]),
-          HEADER[4].ljust(w[4]), HEADER[5].ljust(w[5]),
-          HEADER[6].ljust(w[6]), HEADER[7])
-    print("-" * (sum(w) + 7))
+    palette = Palette(enabled=sys.stdout.isatty())
+    rows = []
     for h in result.hosts:
         ports = ",".join(port_label(p) for p in h.open_ports) if h.open_ports else "-"
         latency = f"{h.latency_ms:.1f}ms" if h.latency_ms is not None else "-"
-        print(
-            h.ip.ljust(w[0]),
-            (h.mac or "-").ljust(w[1]),
-            (h.vendor or "-")[:20].ljust(w[2]),
-            (h.hostname or "-")[:20].ljust(w[3]),
-            ports.ljust(w[4]),
-            str(h.ttl if h.ttl is not None else "-").ljust(w[5]),
-            (h.os_guess or "-").ljust(w[6]),
+        rows.append([
+            h.ip,
+            h.mac or "-",
+            (h.vendor or "-")[:20],
+            (h.hostname or "-")[:20],
+            ports,
+            str(h.ttl) if h.ttl is not None else "-",
+            h.os_guess or "-",
             latency,
-        )
+        ])
+    print(render_table(HEADERS, rows, palette))
     print(f"\n{result.count} dispositivo(s) encontrados en {result.target}.")
 
 
@@ -95,10 +92,10 @@ def _add_scan_options(sub: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="apnetscan",
-        description="APNetScan: detector de dispositivos en red local con WOL.",
+        prog="apsoft",
+        description=f"{APP_TITLE}: escáner de dispositivos en red local con WOL.",
     )
-    parser.add_argument("--version", action="version", version=f"apnetscan {__version__}")
+    parser.add_argument("--version", action="version", version=f"{APP_TITLE} {__version__}")
     sub = parser.add_subparsers(dest="command")
 
     scan = sub.add_parser("scan", help="Escanear red(es) y listar dispositivos.")
@@ -149,9 +146,8 @@ def _post_scan(args, result: ScanResult) -> None:
     from . import inventory
 
     if result.hosts:
-        _print_table(result)
-    else:
-        print("No se detectaron dispositivos.")
+        print_banner()
+    _print_table(result)
 
     if args.diff:
         inv_diff = inventory.diff(result)
@@ -180,6 +176,7 @@ def _cmd_scan(args) -> int:
 
 def _cmd_watch(args) -> int:
     try:
+        print_banner()
         while True:
             print(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
             try:
