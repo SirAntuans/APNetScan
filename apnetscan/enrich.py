@@ -86,6 +86,33 @@ def measure_latency(ip: str, timeout: float = 1.0) -> tuple[Optional[float], Opt
     return None, None
 
 
+def parse_port_range(spec: str) -> list[int]:
+    """Convierte '80', '1-1024' o '20-25,80,443' en lista de puertos."""
+    ports: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            low, _, high = part.partition("-")
+            try:
+                lo, hi = int(low), int(high)
+            except ValueError:
+                raise ValueError(f"Rango de puertos inválido: {part!r}")
+            if not (1 <= lo <= hi <= 65535):
+                raise ValueError(f"Rango de puertos inválido: {part!r}")
+            ports.update(range(lo, hi + 1))
+        else:
+            try:
+                p = int(part)
+            except ValueError:
+                raise ValueError(f"Puerto inválido: {part!r}")
+            if not (1 <= p <= 65535):
+                raise ValueError(f"Puerto fuera de rango: {part!r}")
+            ports.add(p)
+    return sorted(ports)
+
+
 def check_ports(
     ip: str,
     ports: list[int],
@@ -93,6 +120,8 @@ def check_ports(
     workers: int = 16,
 ) -> list[int]:
     """Comprueba qué puertos TCP están abiertos en la IP dada."""
+    if not ports:
+        return []
     open_ports: list[int] = []
 
     def _check(port: int) -> Optional[int]:

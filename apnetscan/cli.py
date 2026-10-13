@@ -78,6 +78,10 @@ def _add_scan_options(sub: argparse.ArgumentParser) -> None:
         "--common-ports", action="store_true",
         help="Comprobar puertos comunes (21,22,23,25,53,80,...).",
     )
+    sub.add_argument(
+        "--port-range", metavar="SPEC",
+        help="Rango de puertos a comprobar: '80', '1-1024' o '20-25,80,443'.",
+    )
     sub.add_argument("--json", help="Guardar resultados en JSON.")
     sub.add_argument("--csv", help="Guardar resultados en CSV.")
     sub.add_argument(
@@ -124,13 +128,46 @@ def build_parser() -> argparse.ArgumentParser:
     passive.add_argument("--duration", type=float, default=30.0, help="Segundos.")
     passive.add_argument("--iface", help="Interfaz de red.")
     passive.add_argument("--json", help="Guardar resultados en JSON.")
+
+    tui = sub.add_parser(
+        "tui", help="Panel interactivo (requiere rich: pip install apnetscan[tui])."
+    )
+    tui.add_argument(
+        "-t", "--target", nargs="+",
+        help="Red(es) en CIDR o IP. Vacío = redes locales.",
+    )
+    tui.add_argument(
+        "--method",
+        choices=[m.value for m in ScanMethod],
+        default=ScanMethod.AUTO.value,
+    )
+    tui.add_argument("--timeout", type=float, default=2.0)
+    tui.add_argument("--no-resolve", action="store_true")
+    tui.add_argument(
+        "--interval", type=float, default=30.0,
+        help="Segundos entre re-escaneos (por defecto: 30).",
+    )
+    tui.add_argument(
+        "--ports", nargs="*", type=int, default=None,
+        help="Comprobar estos puertos TCP en cada host.",
+    )
+    tui.add_argument("--common-ports", action="store_true")
+    tui.add_argument("--port-range", metavar="SPEC", help="'80', '1-1024' o '20-25,80'.")
     return parser
 
 
-def _run_scan(args) -> ScanResult:
-    from .enrich import COMMON_PORTS
+def _resolve_ports(args) -> list[int]:
+    from .enrich import COMMON_PORTS, parse_port_range
 
-    ports = COMMON_PORTS if args.common_ports else (args.ports or [])
+    if getattr(args, "port_range", None):
+        return parse_port_range(args.port_range)
+    if args.common_ports:
+        return COMMON_PORTS
+    return args.ports or []
+
+
+def _run_scan(args) -> ScanResult:
+    ports = _resolve_ports(args)
     scanner = Scanner(
         method=args.method,
         timeout=args.timeout,
@@ -226,6 +263,29 @@ def _cmd_passive(args) -> int:
     return 0
 
 
+def _cmd_tui(args) -> int:
+    try:
+        from .tui import run_tui
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    ports = _resolve_ports(args)
+    scanner = Scanner(
+        method=args.method,
+        timeout=args.timeout,
+        resolve_names=not args.no_resolve,
+        ports=ports,
+    )
+    try:
+        return run_tui(scanner, targets=args.target, interval=args.interval)
+    except KeyboardInterrupt:
+        print("\nSaliendo del panel.")
+        return 0
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "wol":
@@ -236,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_watch(args)
     if args.command == "scan":
         return _cmd_scan(args)
+    if args.command == "tui":
+        return _cmd_tui(args)
     build_parser().parse_args(["scan", "--help"])
     return 0
 

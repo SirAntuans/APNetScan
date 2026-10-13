@@ -90,3 +90,12 @@ Escanear redes de terceros sin permiso puede ser ilegal.
   `apnetscan` como alias) y banner ASCII con el título APSoft.
 - **Salida gráfica tipo panel**: tabla con bordes box-drawing (┌─┬─┐) y colores
   ANSI que se desactivan automáticamente en pipes/CI para máxima estabilidad.
+
+## v1.1.0 — Rangos de puertos y panel TUI
+
+- **Escaneo de rangos de puertos**: `--port-range 1-1024`, `--port-range 80` o
+  `--port-range 20-25,80,443` en `scan`, `watch` y `tui`.
+- **Panel TUI interactivo** (`apsoft tui`, requiere `pip install apnetscan[tui]`):
+  tabla viva con navegación ↑/↓, `r` para refrescar, `w` para enviar WOL al
+  dispositivo seleccionado y `q` para salir. Se re-escanea automáticamente
+  cada `--interval` segundos.
