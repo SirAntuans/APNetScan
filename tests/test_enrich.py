@@ -46,5 +46,6 @@ def test_ports_compact_truncates():
     many = [21, 22, 53, 80, 139, 443, 445, 3389]
     out = ports_compact(many, max_len=14)
     assert out.startswith("21,")
-    assert out.endswith(f",+{len(many) - out.count(',') - 1}")
+    shown = len([p for p in out.split(",") if not p.startswith("+")])
+    assert out.endswith(f",+{len(many) - shown}")
     assert len(out) <= 14
