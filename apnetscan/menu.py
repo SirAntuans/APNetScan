@@ -155,12 +155,61 @@ def main_menu() -> int:
             return 1
         return _detect_or_ask(["--port-range", spec])
 
+    def _known_macs() -> list[tuple[str, str]]:
+        """Devuelve [(mac, etiqueta)] del inventario guardado y de la tabla ARP."""
+        known: dict[str, str] = {}
+        try:
+            from .inventory import DEFAULT_PATH, _load
+
+            stored = _load(DEFAULT_PATH)
+            for ip, data in stored.items():
+                mac = data.get("mac")
+                if mac:
+                    label = data.get("hostname") or data.get("vendor") or ip
+                    known[mac] = f"{mac}  ({label})"
+        except Exception:
+            pass
+        try:
+            from .utils import arp_table
+
+            for ip, mac in arp_table().items():
+                if mac and mac not in known:
+                    known[mac] = f"{mac}  ({ip})"
+        except Exception:
+            pass
+        return [(mac, label) for mac, label in known.items()]
+
     def _do_wol() -> int:
-        macs = input("MACs (separadas por espacio): ").strip()
+        known = _known_macs()
+        print("\nMACs conocidas:")
+        if known:
+            for idx, (mac, label) in enumerate(known, 1):
+                print(f"  [{idx}] {label}")
+        else:
+            print("  (ninguna en inventario/tabla ARP)")
+        print("  [m] Introducir MAC manualmente")
+        choice = input("Selecciona número, 'm' para manual, o varias separadas por coma (Enter = cancelar): ").strip()
+        if not choice:
+            print("Cancelado.")
+            return 1
+
+        macs: list[str] = []
+        for part in choice.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part.lower() == "m":
+                manual = input("MAC (ej. aa:bb:cc:dd:ee:ff): ").strip()
+                if manual:
+                    macs.append(manual)
+            elif part.isdigit() and 1 <= int(part) <= len(known):
+                macs.append(known[int(part) - 1][0])
+            else:
+                macs.append(part)
         if not macs:
             print("Sin MACs, cancelado.")
             return 1
-        return cli.main(["wol"] + macs.split())
+        return cli.main(["wol"] + macs)
 
     def _do_tui() -> int:
         nets = local_networks()
