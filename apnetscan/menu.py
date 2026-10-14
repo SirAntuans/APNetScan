@@ -202,8 +202,12 @@ def main_menu() -> int:
                 manual = input("MAC (ej. aa:bb:cc:dd:ee:ff): ").strip()
                 if manual:
                     macs.append(manual)
-            elif part.isdigit() and 1 <= int(part) <= len(known):
-                macs.append(known[int(part) - 1][0])
+            elif part.isdigit():
+                n = int(part)
+                if 1 <= n <= len(known):
+                    macs.append(known[n - 1][0])
+                else:
+                    print(f"Número {n} fuera de la lista de MACs conocidas, ignorado.")
             else:
                 macs.append(part)
         if not macs:
