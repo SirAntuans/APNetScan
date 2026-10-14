@@ -30,3 +30,21 @@ def test_enrich_host_no_ports():
     result = enrich_host(host, ports=[], with_latency=False)
     assert result.ip == "127.0.0.1"
     assert result.open_ports == []
+
+
+def test_ports_compact_short():
+    from apnetscan.enrich import ports_compact
+
+    assert ports_compact([]) == "-"
+    assert ports_compact([80]) == "80"
+    assert ports_compact([80, 443]) == "80,443"
+
+
+def test_ports_compact_truncates():
+    from apnetscan.enrich import ports_compact
+
+    many = [21, 22, 53, 80, 139, 443, 445, 3389]
+    out = ports_compact(many, max_len=14)
+    assert out.startswith("21,")
+    assert out.endswith(f",+{len(many) - out.count(',') - 1}")
+    assert len(out) <= 14

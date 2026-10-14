@@ -79,30 +79,75 @@ def _ping_one(ip: str, timeout: float) -> bool:
         return False
 
 
-def _ping_scan(network: str, timeout: float, workers: int = 32) -> list[Host]:
-    """Ping sweep sobre un CIDR con pool de hilos.
+def _udp_probe_one(ip: str, timeout: float) -> bool:
+    """Sonda UDP: un host vivo suele responder ICMP port-unreachable.
 
-    Tras el sweep, lee la tabla ARP del SO para asignar MAC a cada IP
-    respondida (el ping acaba de poblar la cache ARP del sistema).
+    Delata hosts que bloquean ping (p. ej. Windows con firewall).
+    """
+    import socket as _socket
+
+    try:
+        with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)
+            sock.sendto(b"\\x00", (ip, 33434))
+            try:
+                sock.recvfrom(64)
+                return True
+            except _socket.timeout:
+                return False
+            except OSError:
+                return False
+    except OSError:
+        return False
+
+
+def _ping_scan(network: str, timeout: float, workers: int = 32) -> list[Host]:
+    """Ping sweep + sonda UDP + cosecha de tabla ARP del SO.
+
+    Motores combinados para maximizar descubrimiento:
+    1. Ping ICMP (hosts que responden a ping).
+    2. Sonda UDP: hosts vivos devuelven ICMP port-unreachable aunque
+       bloqueen ping (tipico de Windows con firewall activado).
+    3. Tabla ARP del sistema: IPs que el SO conoce (router/gateway ya
+       contactado) aunque no respondan a nada.
     """
     from .utils import arp_table, lookup_vendor
 
     net = ipaddress.ip_network(network, strict=False)
     ips = [str(ip) for ip in net.hosts()] or [str(net.network_address)]
-    hosts: list[Host] = []
+    found: dict[str, str] = {}
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(_ping_one, ip, timeout): ip for ip in ips}
-        for future in concurrent.futures.as_completed(futures):
-            if future.result():
-                ip = futures[future]
-                hosts.append(Host(ip=ip, method="ping"))
+        ping_results = {ip: r for r, ip in zip(
+            pool.map(lambda i: _ping_one(i, timeout), ips), ips
+        )}
+    for ip, alive in ping_results.items():
+        if alive:
+            found[ip] = "ping"
+
+    pending = [ip for ip in ips if ip not in found]
+    if pending:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            udp_results = {ip: r for r, ip in zip(
+                pool.map(lambda i: _udp_probe_one(i, timeout), pending), pending
+            )}
+        for ip, alive in udp_results.items():
+            if alive:
+                found[ip] = "udp"
 
     table = arp_table()
-    for host in hosts:
-        mac = table.get(host.ip)
+    for ip in ips:
+        if ip not in found and ip in table:
+            found[ip] = "arp"
+
+    hosts: list[Host] = []
+    for ip, method in found.items():
+        host = Host(ip=ip, method=method)
+        mac = table.get(ip)
         if mac:
             host.mac = mac
             host.vendor = lookup_vendor(mac)
+        hosts.append(host)
 
     hosts.sort(key=lambda h: ipaddress.ip_address(h.ip))
     return hosts

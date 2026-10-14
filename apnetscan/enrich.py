@@ -164,3 +164,25 @@ def port_label(port: int) -> str:
     """Devuelve '22 (ssh)' o '8080' según el puerto."""
     name = PORT_NAMES.get(port)
     return f"{port} ({name})" if name else str(port)
+
+
+def ports_compact(open_ports: list[int], max_len: int = 18) -> str:
+    """Representación compacta de puertos para tablas: números y truncado.
+
+    Ejemplos: '21,22,53,80', '80,139,443,+3', '-'
+    """
+    if not open_ports:
+        return "-"
+    items = [str(p) for p in open_ports]
+    out = ",".join(items)
+    if len(out) <= max_len:
+        return out
+    shown: list[str] = []
+    total = 0
+    for it in items:
+        if total + len(it) + 1 > max_len - 3:
+            break
+        shown.append(it)
+        total += len(it) + 1
+    rest = len(items) - len(shown)
+    return ",".join(shown) + f",+{rest}"

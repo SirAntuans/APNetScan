@@ -13,6 +13,7 @@ import sys
 import time
 from typing import Optional
 
+from .enrich import ports_compact
 from .models import ScanResult
 from .scanner import Scanner
 
@@ -44,7 +45,7 @@ def build_table(result: ScanResult, selected: int) -> Table:
 
     for idx, h in enumerate(result.hosts):
         marker = "→" if idx == selected else ""
-        ports = ",".join(str(p) for p in h.open_ports) if h.open_ports else "-"
+        ports = ports_compact(h.open_ports, max_len=20)
         latency = f"{h.latency_ms:.1f}ms" if h.latency_ms is not None else "-"
         style = "bold yellow" if idx == selected else None
         table.add_row(

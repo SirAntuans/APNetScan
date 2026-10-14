@@ -8,7 +8,7 @@ import time
 
 from . import __version__
 from .display import APP_TITLE, Palette, print_banner, render_table
-from .enrich import port_label
+from .enrich import ports_compact
 from .export import to_csv, to_json
 from .models import ScanResult
 from .passive import listen
@@ -22,7 +22,7 @@ def _print_table(result: ScanResult) -> None:
     palette = Palette(enabled=sys.stdout.isatty())
     rows = []
     for h in result.hosts:
-        ports = ",".join(port_label(p) for p in h.open_ports) if h.open_ports else "-"
+        ports = ports_compact(h.open_ports)
         latency = f"{h.latency_ms:.1f}ms" if h.latency_ms is not None else "-"
         rows.append([
             h.ip,
