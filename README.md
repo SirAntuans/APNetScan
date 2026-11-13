@@ -116,3 +116,14 @@ Escanear redes de terceros sin permiso puede ser ilegal.
   acaba de poblar. Ya no se necesita scapy ni root para obtener MACs.
 - **Menú**: la opción "Escanear red" pregunta si comprobar puertos comunes.
 - **TTL 254** reinterpretado como "router/IoT (TTL alto)" (etiqueta más precisa).
+
+## v1.8.0 — Diagnóstico de tarjetas de red
+
+- **Nuevo comando `diag`** (opción 9 del menú): estado de los adaptadores
+  (up/down/IP), dispositivos de red con error del Administrador de
+  dispositivos de Windows (WMI ConfigManagerErrorCode, con descripción
+  legible del problema) y avisos (adaptador activo sin IP, etc.).
+- **Limpiezas**: flush de caché DNS y tabla ARP en Windows/Linux/macOS,
+  y `--winsock-reset` opcional en Windows (requiere admin y reinicio).
+- Multiplataforma: en Windows usa netsh/ipconfig/PowerShell, en Linux
+  `ip` y en macOS `ifconfig`.

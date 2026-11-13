@@ -124,6 +124,17 @@ def build_parser() -> argparse.ArgumentParser:
     wol.add_argument("--port", type=int, default=9, help="Puerto UDP (defecto: 9).")
     wol.add_argument("--attempts", type=int, default=3, help="Intentos por MAC.")
 
+    diag = sub.add_parser(
+        "diag", help="Diagnóstico de tarjetas de red y limpiezas (DNS/ARP/winsock)."
+    )
+    diag.add_argument("--no-flush", action="store_true", help="Solo diagnosticar, sin limpiar.")
+    diag.add_argument("--no-dns", action="store_true", help="No limpiar caché DNS.")
+    diag.add_argument("--no-arp", action="store_true", help="No limpiar tabla ARP.")
+    diag.add_argument(
+        "--winsock-reset", action="store_true",
+        help="Reiniciar catálogo Winsock (Windows, requiere admin y reinicio).",
+    )
+
     passive = sub.add_parser("passive", help="Modo pasivo: escuchar ARP (root).")
     passive.add_argument("--duration", type=float, default=30.0, help="Segundos.")
     passive.add_argument("--iface", help="Interfaz de red.")
@@ -286,6 +297,23 @@ def _cmd_tui(args) -> int:
         return 2
 
 
+def _cmd_diag(args) -> int:
+    from . import diag
+
+    diag.print_report()
+    if getattr(args, "no_flush", False):
+        return 0
+    print()
+    results = diag.run_cleanup(
+        do_dns=not args.no_dns,
+        do_arp=not args.no_arp,
+        do_winsock=args.winsock_reset,
+    )
+    for r in results:
+        print(r)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "wol":
@@ -298,6 +326,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_scan(args)
     if args.command == "tui":
         return _cmd_tui(args)
+    if args.command == "diag":
+        return _cmd_diag(args)
     from .menu import main_menu
 
     return main_menu()

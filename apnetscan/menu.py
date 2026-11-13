@@ -20,6 +20,7 @@ MENU_OPTIONS = [
     ("6", "Guardar inventario", "Escaneo y guardado en ~/.apnetscan/inventory.json"),
     ("7", "Comparar con inventario", "Mostrar deltas: nuevos, desaparecidos, modificados"),
     ("8", "Modo pasivo", "Escucha ARP sin emitir tráfico (requiere root)"),
+    ("9", "Diagnóstico de red", "Estado de tarjetas, errores del Administrador de dispositivos y limpiezas"),
     ("0", "Salir", "Cerrar la aplicación"),
 ]
 
@@ -238,6 +239,11 @@ def main_menu() -> int:
         dur = input("Duración en segundos (30): ").strip() or "30"
         return cli.main(["passive", "--duration", dur])
 
+    def _do_diag() -> int:
+        ans = input("¿Aplicar limpiezas (flush DNS/ARP)? (s/N): ").strip().lower()
+        extra = [] if ans == "s" else ["--no-flush"]
+        return cli.main(["diag"] + extra)
+
     actions = {
         "1": _do_scan,
         "2": _do_scan_ports,
@@ -247,6 +253,7 @@ def main_menu() -> int:
         "6": _do_save,
         "7": _do_diff,
         "8": _do_passive,
+        "9": _do_diag,
     }
     return menu_loop(actions)
 
